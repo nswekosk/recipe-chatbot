@@ -179,4 +179,6 @@ results/*
 
 *.pkl
 homeworks/hw4/data/RAW_recipes.csv
-annotation/traces
+annotation/traces/*
+results/*
+
