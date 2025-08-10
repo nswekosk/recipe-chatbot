@@ -1,25 +1,56 @@
 #!/usr/bin/env python3
 """Develop and refine the LLM judge prompt for dietary adherence evaluation.
 
-This script creates an LLM judge prompt with carefully selected few-shot examples
-using embedding similarity and iteratively refines it on the dev set.
-"""
+By default the script will use the base prompt provided by the course and add
+one random positive and three random negative few-shot examples from the train
+set.
 
-import pandas as pd
+This script also offers other possibilities to create the judge prompt. These 
+other options can all be set in the global variables at the top of the file.
+
+This script offers two options for defining the base prompt:
+
+- Use the base prompt profided by the course with automatically selected few-shot examples.
+- Use a prompt of your own design with manually selected few-shot examples.
+
+When using the base prompt profided by the course, this script offers two options for
+adding the few-shot examples:
+
+- Randomly add few-shot examples from the train set.
+- Randomly add few-shot examples from the train set, but use a seed for reproducibility.
+
+When using a prompt of your own design, be sure to:
+- place it in `homeworks/hw3/results/judge_prompt.txt`,
+- be sure to have the following placeholders in the prompt: 
+  - `__QUERY__`, 
+  - `__DIETARY_RESTRICTION__`, 
+  - `__RESPONSE__`.
+  The script uses these to embed the query, dietary restriction and recipe response in the
+  evaluation prompt.
+"""
 import json
+import pandas as pd
 import random
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Final
 from rich.console import Console
 from rich.progress import track
 import litellm
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Global variables that can be set by user
+SEED = None # Set to an integer to use a seed for reproducibility of selected few-shot examples
+OWN_PROMPT = False # Set to True to use a base prompt of your own design
+
+# Start script
 load_dotenv()
 MAX_WORKERS = 32
 
 console = Console()
+
+# Model used for the LLM judge
+MODEL_NAME_JUDGE: Final[str] = os.environ.get("MODEL_NAME_JUDGE", "gpt-4o-nano")
 
 def load_data_split(csv_path: str) -> List[Dict[str, Any]]:
     """Load a data split from CSV file."""
@@ -28,7 +59,8 @@ def load_data_split(csv_path: str) -> List[Dict[str, Any]]:
 
 def select_few_shot_examples(train_traces: List[Dict[str, Any]], 
                            num_positive: int = 1, 
-                           num_negative: int = 3) -> List[Dict[str, Any]]:
+                           num_negative: int = 3,
+                           seed: Optional[int] = None) -> List[Dict[str, Any]]:
     """Select few-shot examples randomly from train set."""
     
     console.print("[yellow]Selecting random few-shot examples...")
@@ -40,6 +72,8 @@ def select_few_shot_examples(train_traces: List[Dict[str, Any]],
     selected_examples = []
     
     # Select positive examples (PASS) randomly
+    if seed is not None:
+        random.seed(seed)
     if train_pass and len(train_pass) >= num_positive:
         selected_examples.extend(random.sample(train_pass, num_positive))
     elif train_pass:
@@ -112,6 +146,15 @@ Provide your evaluation in the following JSON format:
     
     return base_prompt
 
+def read_judge_prompt(f: Path # file path to the judge prompt
+                     ) -> str:
+    """Read the judge prompt from the file."""
+
+    if not f.exists():
+        raise FileNotFoundError(f"Judge prompt file {f} does not exist.")
+
+    return f.read_text(encoding='utf-8')
+
 def evaluate_single_trace(args: tuple) -> Dict[str, Any]:
     """Evaluate a single trace with the judge - for parallel processing."""
     trace, judge_prompt = args
@@ -122,6 +165,13 @@ def evaluate_single_trace(args: tuple) -> Dict[str, Any]:
     true_label = trace["label"]
     
     # Format the prompt using string replacement
+    if not "__QUERY__" in judge_prompt:
+        raise ValueError("Judge prompt does not contain __QUERY__ placeholder.")
+    if not "__DIETARY_RESTRICTION__" in judge_prompt:
+        raise ValueError("Judge prompt does not contain __DIETARY_RESTRICTION__ placeholder.")
+    if not "__RESPONSE__" in judge_prompt:
+        raise ValueError("Judge prompt does not contain __RESPONSE__ placeholder.")
+    
     formatted_prompt = judge_prompt.replace("__QUERY__", query)
     formatted_prompt = formatted_prompt.replace("__DIETARY_RESTRICTION__", dietary_restriction)
     formatted_prompt = formatted_prompt.replace("__RESPONSE__", response)
@@ -129,7 +179,7 @@ def evaluate_single_trace(args: tuple) -> Dict[str, Any]:
     try:
         # Get judge prediction
         completion = litellm.completion(
-            model="gpt-4.1-nano",  # Use a cheaper model for judge evaluation
+            model=MODEL_NAME_JUDGE,  # Use a cheaper model for judge evaluation
             messages=[{"role": "user", "content": formatted_prompt}],
         )
         
@@ -257,14 +307,20 @@ def main():
     console.print(f"[green]Loaded {len(train_traces)} train traces and {len(dev_traces)} dev traces")
     
     # Select few-shot examples randomly
-    few_shot_examples = select_few_shot_examples(train_traces)
+    few_shot_examples = select_few_shot_examples(train_traces, seed=SEED)
     
     if not few_shot_examples:
         console.print("[red]Failed to select few-shot examples!")
         return
     
     # Create judge prompt
-    judge_prompt = create_judge_prompt(few_shot_examples)
+    if OWN_PROMPT:
+        prompt_path = results_dir / "judge_prompt.txt"
+        console.print("[yellow]Using custom judge prompt...")
+        judge_prompt = read_judge_prompt(prompt_path)
+    else:
+        console.print("[yellow]Using base judge prompt...")
+        judge_prompt = create_judge_prompt(few_shot_examples)
     
     # Evaluate judge on dev set
     console.print("[yellow]Evaluating judge on dev set...")

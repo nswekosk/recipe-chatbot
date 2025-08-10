@@ -50,8 +50,9 @@ Choose the option that best fits your learning goals and available time!
 - **Option 2**: Use our provided `raw_traces.csv`, then label a subset
 
 ### Step 2: Split Your Labeled Data *[Option 3 starts here]*
+
 - Divide your labeled set into Train (~10-20%), Dev (~40%), and Test (~40-50%)
-- **Option 3**: Use our provided `labeled_traces.csv` (has 150 queries, which is > 100 but we provide more for demonstration purposes) and split it
+- **Option 3**: Use our provided `labeled_traces.csv` and split it
 
 ### Step 3: Develop Your LLM-as-Judge Prompt *[All options continue from here]*
 Craft a clear prompt with:
