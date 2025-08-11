@@ -28,6 +28,8 @@ When using a prompt of your own design, be sure to:
   The script uses these to embed the query, dietary restriction and recipe response in the
   evaluation prompt.
 """
+
+import os
 import json
 import pandas as pd
 import random
