@@ -8,6 +8,12 @@ set.
 This script also offers other possibilities to create the judge prompt. These 
 other options can all be set in the global variables at the top of the file.
 
+This opens the opportunity to first run the script with the default settings
+which will result in the default prompt with random few-shot examples saved as
+`/homeworks/hw3/results/judge_prompt.txt`. And then adjust this prompt manually
+and run the script again with `OWN_PROMPT = True` to use your own manually
+changed prompt.
+
 This script offers two options for defining the base prompt:
 
 - Use the base prompt profided by the course with automatically selected few-shot examples.
@@ -36,7 +42,6 @@ import random
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, Final
 from rich.console import Console
-from rich.progress import track
 import litellm
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -86,8 +91,12 @@ def select_few_shot_examples(train_traces: List[Dict[str, Any]],
         selected_examples.extend(random.sample(train_fail, num_negative))
     elif train_fail:
         selected_examples.extend(train_fail)  # Use all available if less than requested
-    
-    console.print(f"[green]Selected {len(selected_examples)} few-shot examples ({len([e for e in selected_examples if e['label'] == 'PASS'])} PASS, {len([e for e in selected_examples if e['label'] == 'FAIL'])} FAIL)")
+
+    pass_c = len([e for e in selected_examples if e['label'] == 'PASS'])
+    fail_c = len([e for e in selected_examples if e['label'] == 'FAIL'])
+    console.print(
+        f"[green]Selected {len(selected_examples)} "
+        f"few-shot examples ({pass_c} PASS, {fail_c} FAIL)")
     return selected_examples
 
 def create_judge_prompt(few_shot_examples: List[Dict[str, Any]]) -> str:
@@ -231,7 +240,6 @@ def evaluate_judge_on_dev(judge_prompt: str, dev_traces: List[Dict[str, Any]],
     
     # Sample dev traces for evaluation
     if len(dev_traces) > sample_size:
-        import random
         sampled_traces = random.sample(dev_traces, sample_size)
     else:
         sampled_traces = dev_traces
@@ -278,7 +286,7 @@ def evaluate_judge_on_dev(judge_prompt: str, dev_traces: List[Dict[str, Any]],
 
 def save_judge_prompt(prompt: str, output_path: str) -> None:
     """Save the judge prompt to a text file."""
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(prompt)
     console.print(f"[green]Saved judge prompt to {output_path}")
 
@@ -303,21 +311,24 @@ def main():
         console.print("[yellow]Please run split_data.py first.")
         return
     
-    train_traces = load_data_split(str(train_path))
+    # Select few-shot examples randomly from train set
+    if not OWN_PROMPT:
+        train_traces = load_data_split(str(train_path))
+        console.print(f"[green]Loaded {len(train_traces)} train traces")
+        few_shot_examples = select_few_shot_examples(train_traces, seed=SEED)
+
+        if not few_shot_examples:
+            console.print("[red]Failed to select few-shot examples!")
+            return
+
+    # Load dev set
     dev_traces = load_data_split(str(dev_path))
-    
-    console.print(f"[green]Loaded {len(train_traces)} train traces and {len(dev_traces)} dev traces")
-    
-    # Select few-shot examples randomly
-    few_shot_examples = select_few_shot_examples(train_traces, seed=SEED)
-    
-    if not few_shot_examples:
-        console.print("[red]Failed to select few-shot examples!")
-        return
+    console.print(f"[green]Loaded {len(dev_traces)} dev traces")
     
     # Create judge prompt
+    prompt_path = results_dir / "judge_prompt.txt"
+
     if OWN_PROMPT:
-        prompt_path = results_dir / "judge_prompt.txt"
         console.print("[yellow]Using custom judge prompt...")
         judge_prompt = read_judge_prompt(prompt_path)
     else:
@@ -333,17 +344,17 @@ def main():
     console.print(f"True Positive Rate (TPR): {tpr:.3f}")
     console.print(f"True Negative Rate (TNR): {tnr:.3f}")
     console.print(f"Balanced Accuracy: {(tpr + tnr) / 2:.3f}")
-    
+ 
     # Save judge prompt
-    prompt_path = results_dir / "judge_prompt.txt"
-    save_judge_prompt(judge_prompt, str(prompt_path))
-    
+    if not OWN_PROMPT:
+        save_judge_prompt(judge_prompt, str(prompt_path))
+ 
     # Save dev set predictions for analysis
     predictions_path = results_dir / "dev_predictions.json"
-    with open(predictions_path, 'w') as f:
+    with open(predictions_path, 'w', encoding='utf-8') as f:
         json.dump(predictions, f, indent=2)
     console.print(f"[green]Saved dev predictions to {predictions_path}")
-    
+ 
     console.print("\n[bold green]Judge development completed!")
     console.print(f"[blue]Judge prompt saved to: {prompt_path}")
 
