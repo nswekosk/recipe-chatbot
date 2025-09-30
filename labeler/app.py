@@ -22,15 +22,59 @@ asgi_app = WSGIMiddleware(app)
 
 
 def list_trace_files():
-    files = [f for f in os.listdir(TRACES_DIR) if f.endswith('.json')]
-    files.sort()
-    return files
+    """Return a flattened list of trace identifiers.
+
+    Supports two formats in TRACES_DIR:
+    - Single-object JSON files: one trace per file → identifier is the filename
+    - Array-of-objects JSON files: multiple traces in one file → identifiers are
+      "filename#ts" for each entry, where ts is the entry's timestamp field
+    """
+    ids = []
+    for fname in sorted([f for f in os.listdir(TRACES_DIR) if f.endswith('.json')]):
+        path = os.path.join(TRACES_DIR, fname)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+        except Exception:
+            # Skip unreadable files
+            continue
+        if isinstance(raw, list):
+            for entry in raw:
+                ts = entry.get('ts') or ''
+                # Only include entries that look like valid traces
+                if isinstance(entry, dict) and 'response' in entry:
+                    ids.append(f"{fname}#{ts}" if ts else f"{fname}#")
+        elif isinstance(raw, dict):
+            ids.append(fname)
+    return ids
 
 
-def load_trace(filename: str):
+def load_trace(file_id: str):
+    """Load trace by identifier.
+
+    file_id may be a plain filename (single-object trace) or
+    "filename#ts" to select a specific entry from an array-of-traces file.
+    """
+    if '#' in file_id:
+        filename, entry_ts = file_id.split('#', 1)
+    else:
+        filename, entry_ts = file_id, None
     path = os.path.join(TRACES_DIR, filename)
     with open(path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+        raw = json.load(f)
+    # If array, choose the entry by ts when provided; otherwise take the last
+    if isinstance(raw, list) and raw:
+        if entry_ts:
+            selected = None
+            for entry in raw:
+                if isinstance(entry, dict) and str(entry.get('ts', '')) == entry_ts:
+                    selected = entry
+                    break
+            data = selected or raw[-1]
+        else:
+            data = raw[-1]
+    else:
+        data = raw
     # Extract initial query and last assistant response
     request_messages = data.get('request', {}).get('messages', [])
     response_messages = data.get('response', {}).get('messages', [])
@@ -61,7 +105,7 @@ def load_trace(filename: str):
                 initial_query = m.get('content', '')
                 break
     return {
-        'filename': filename,
+        'filename': file_id,
         'initial_query': initial_query,
         'assistant_output': assistant_output,
     }

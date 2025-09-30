@@ -12,6 +12,18 @@
   const elTotal = document.getElementById('meta-total');
   const elVerdictPill = document.getElementById('verdict-pill');
 
+  function normalizeMarkdown(md) {
+    if (!md) return '';
+    let text = String(md)
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
+    // Trim trailing spaces on each line
+    text = text.split('\n').map((line) => line.replace(/\s+$/g, '')).join('\n');
+    // Collapse 3+ blank lines to a single blank line
+    text = text.replace(/\n{3,}/g, '\n\n');
+    return text.trim();
+  }
+
   function setVerdict(v) {
     currentVerdict = v;
     elVerdictPill.className = 'pill ' + (v === 'up' ? 'up' : v === 'down' ? 'down' : '');
@@ -26,7 +38,7 @@
     const data = await resp.json();
     currentFilename = data.filename;
     elInitial.textContent = data.initial_query || '';
-    const md = data.assistant_output || '';
+    const md = normalizeMarkdown(data.assistant_output || '');
     const unsafeHtml = (window.marked ? window.marked.parse(md) : md);
     const safeHtml = window.DOMPurify ? window.DOMPurify.sanitize(unsafeHtml) : unsafeHtml;
     elAssistant.innerHTML = safeHtml;

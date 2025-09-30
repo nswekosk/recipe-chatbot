@@ -72,16 +72,55 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:  # noqa: WPS430
 
     response = ChatResponse(messages=[ChatMessage(**msg) for msg in updated_messages_dicts])
 
-    # Save trace (request and response) in one place
+    # Save trace (request and response). If an existing trace file is present,
+    # reuse it by appending; otherwise, create a new one.
     traces_dir = Path(__file__).parent.parent / "annotation" / "traces"
     traces_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    trace_path = traces_dir / f"trace_{ts}.json"
-    with open(trace_path, "w") as f:
-        json.dump({
-            "request": payload.model_dump(),
-            "response": response.model_dump()
-        }, f)
+
+    # Choose an existing .json file if available (most recently modified),
+    # otherwise create a new timestamped file.
+    existing_json_files = sorted(
+        traces_dir.glob("*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if existing_json_files:
+        trace_path = existing_json_files[0]
+    else:
+        trace_path = traces_dir / f"trace_{ts}.json"
+
+    new_entry = {
+        "ts": ts,
+        "request": payload.model_dump(),
+        "response": response.model_dump(),
+    }
+
+    # Try to maintain valid JSON by using an array in the file. If the existing
+    # file contains a single JSON object, wrap it into a list and append. If the
+    # file is newline-delimited JSON, fall back to appending a JSON line.
+    if trace_path.exists():
+        try:
+            existing_content = trace_path.read_text(encoding="utf-8").strip()
+            if not existing_content:
+                data = []
+            else:
+                parsed = json.loads(existing_content)
+                if isinstance(parsed, list):
+                    data = parsed
+                else:
+                    data = [parsed]
+            data.append(new_entry)
+            trace_path.write_text(json.dumps(data), encoding="utf-8")
+        except json.JSONDecodeError:
+            # Fallback to JSON Lines append if the file isn't valid JSON array/object
+            with open(trace_path, "a", encoding="utf-8") as f:
+                if existing_content and not existing_content.endswith("\n"):
+                    f.write("\n")
+                f.write(json.dumps(new_entry) + "\n")
+    else:
+        # Create a new file with a JSON array holding the first entry
+        trace_path.write_text(json.dumps([new_entry]), encoding="utf-8")
 
     return response
 

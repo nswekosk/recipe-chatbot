@@ -20,3 +20,21 @@ code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 
 #feedbacks table tbody tr:hover { background: #f9fafb; }
 
 
+/* Consistent markdown spacing for Assistant Response */
+#assistant_output { white-space: normal; line-height: 1.6; }
+#assistant_output p,
+#assistant_output ul,
+#assistant_output ol,
+#assistant_output pre,
+#assistant_output blockquote,
+#assistant_output table { margin: 0 0 12px; }
+#assistant_output h1,
+#assistant_output h2,
+#assistant_output h3,
+#assistant_output h4,
+#assistant_output h5,
+#assistant_output h6 { margin: 16px 0 8px; line-height: 1.3; }
+#assistant_output li { margin: 4px 0; }
+#assistant_output pre { padding: 10px; background: #f8fafc; border-radius: 6px; overflow: auto; }
+#assistant_output code { background: #f3f4f6; padding: 0 4px; border-radius: 4px; }
+

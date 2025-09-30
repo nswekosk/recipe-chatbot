@@ -51,10 +51,14 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# venv
+recipe-bot/*
+
 # Output files
 *.jsonl
 /data/*
 *.csv
+data/sample_queries.csv
 
 # Translations
 *.mo

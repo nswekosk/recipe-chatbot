@@ -15,7 +15,8 @@ def list_traces():
     for fname in files:
         path = os.path.join(DATASET_DIR, fname)
         with open(path) as f:
-            data = json.load(f)
+            raw = json.load(f)
+        data = raw[-1] if isinstance(raw, list) and raw else raw
         msg = data["request"]["messages"][0]["content"]
         dt = fname.split('_')[1] + ' ' + fname.split('_')[2]
         has_open_coding = bool(data.get("open_coding", ""))
@@ -57,7 +58,8 @@ def get_unique_open_coding_codes():
     codes = set()
     for fname in glob.glob(os.path.join(DATASET_DIR, '*.json')):
         with open(fname) as f:
-            data = json.load(f)
+            raw = json.load(f)
+        data = raw[-1] if isinstance(raw, list) and raw else raw
         note = data.get('open_coding', '')
         if note and note.strip().lower() != 'n/a':
             # Split on double space or newlines for multiple codes, else treat as one code
@@ -71,7 +73,8 @@ def get_unique_axial_coding_codes():
     codes = set()
     for fname in glob.glob(os.path.join(DATASET_DIR, '*.json')):
         with open(fname) as f:
-            data = json.load(f)
+            raw = json.load(f)
+        data = raw[-1] if isinstance(raw, list) and raw else raw
         code = data.get('axial_coding_code', '')
         if code and code.strip():
             codes.add(code.strip())
@@ -81,7 +84,8 @@ def get_unique_axial_coding_codes():
 def annotate(fname:str):
     path = os.path.join(DATASET_DIR, fname)
     with open(path) as f:
-        data = json.load(f)
+        raw = json.load(f)
+    data = raw[-1] if isinstance(raw, list) and raw else raw
     chat =  data["response"]["messages"]
     bubbles = [chat_bubble(m) for m in chat]
     notes = data.get("open_coding", "")
@@ -122,12 +126,21 @@ def annotate(fname:str):
 def save_annotation(fname:str, notes:str, axial_coding_code:str=None, next_fname:str=None):
     path = os.path.join(DATASET_DIR, fname)
     with open(path) as f:
-        data = json.load(f)
-    data["open_coding"] = notes
-    if axial_coding_code is not None:
-        data["axial_coding_code"] = axial_coding_code
+        raw = json.load(f)
+    # If array, update the last record; otherwise update the single object
+    if isinstance(raw, list) and raw:
+        raw[-1]["open_coding"] = notes
+        if axial_coding_code is not None:
+            raw[-1]["axial_coding_code"] = axial_coding_code
+        data_to_write = raw
+    else:
+        data = raw if isinstance(raw, dict) else {}
+        data["open_coding"] = notes
+        if axial_coding_code is not None:
+            data["axial_coding_code"] = axial_coding_code
+        data_to_write = data
     with open(path, "w") as f:
-        json.dump(data, f)
+        json.dump(data_to_write, f)
     return ft.Redirect(annotate.to(fname=next_fname))
 
 @rt
