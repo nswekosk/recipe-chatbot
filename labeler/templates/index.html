@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trace Labeler</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    /* Minimal fallback styles if CSS fails to load */
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; }
+    .container { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 12px; padding: 12px; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; }
+    .panel { border: 1px solid #eee; border-radius: 8px; padding: 12px; background: #fff; }
+    .panel h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: #666; }
+    .toolbar { display: flex; gap: 8px; align-items: center; }
+    .btn { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; cursor: pointer; }
+    .btn.primary { background: #0ea5e9; border-color: #0284c7; color: #fff; }
+    .btn.ghost { background: transparent; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    textarea { width: 100%; min-height: 220px; }
+    #feedbacks { position: fixed; right: 12px; bottom: 12px; width: 36%; max-height: 40vh; overflow: auto; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #eee; text-align: left; padding: 6px; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .pill.up { background: #dcfce7; color: #166534; }
+    .pill.down { background: #fee2e2; color: #991b1b; }
+    .kbd { border: 1px solid #ddd; padding: 1px 6px; border-radius: 6px; background: #fafafa; font-size: 12px; }
+    pre { white-space: pre-wrap; }
+  </style>
+  <script>window.__FILES__ = {{ files|tojson }};</script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script defer src="/static/js/app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <strong>Trace Labeler</strong>
+      <span style="color:#888;margin-left:8px;">Left/Right to navigate, Ctrl/Cmd+S to save</span>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="btn-prev">← Prev <span class="kbd">←</span></button>
+      <button class="btn" id="btn-next">Next → <span class="kbd">→</span></button>
+      <button class="btn" id="btn-export">Save/Export CSV</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel" id="panel-left">
+      <h3>Initial Query</h3>
+      <div id="initial_query" style="white-space: pre-wrap;"></div>
+    </section>
+
+    <section class="panel" id="panel-center">
+      <h3>Assistant Response</h3>
+      <div id="assistant_output" style="white-space: pre-wrap;"></div>
+    </section>
+
+    <section class="panel" id="panel-right">
+      <h3>Feedback</h3>
+      <div class="row" style="margin-bottom:8px;">
+        <button class="btn" id="thumb-up">👍</button>
+        <button class="btn" id="thumb-down">👎</button>
+        <span id="verdict-pill" class="pill">No verdict</span>
+      </div>
+      <textarea id="feedback" placeholder="Write failure modes, notes, or comments..."></textarea>
+      <div class="row" style="justify-content: space-between; margin-top: 8px;">
+        <div style="color:#888; font-size:12px;">Index: <span id="meta-index">-</span> / <span id="meta-total">-</span></div>
+        <div class="row">
+          <button class="btn primary" id="btn-save">Save</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside id="feedbacks">
+    <div class="row" style="justify-content: space-between;">
+      <strong>Saved Feedbacks</strong>
+      <small style="color:#888;">persists to labels.jsonl</small>
+    </div>
+    <div id="feedbacks-table-wrap">
+      <table id="feedbacks-table">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Verdict</th>
+            <th>Feedback</th>
+            <th>Saved At</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </aside>
+
+</body>
+</html>
+
+
